@@ -1,0 +1,278 @@
+---
+title: 'Final Project: Big Data Bowl'
+author: "Owen Brown"
+date: "2023-12-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Big Data Bowl 2024
+
+```{r}
+library(tidyverse)
+
+getwd()
+setwd("C:/Users/owenb/OneDrive/Documents/Sports Analytics 23-24/SAL 602/Module 8/Final Project")
+
+plays <- read_csv("data/plays.csv")
+games <- read_csv("data/games.csv")
+players <- read_csv("data/players.csv")
+tackles <- read_csv("data/tackles.csv")
+trackingWeek1 <- read_csv("data/tracking_week_1.csv")
+trackingLionsEagles <- trackingWeek1 %>% filter(gameId == 2022091104, playId %in% missedTacklePlays$playId)
+
+
+TTTackleAM <- trackingWeek1 %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterMiss = difftime(time[event == "tackle"], 
+                                             time[event == "first_contact"], 
+                                             units = "secs")) %>% distinct(playId, TimeToTackleAfterMiss)
+TTTouchdownAM <- trackingWeek1 %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterMiss = difftime(time[event == "touchdown"], 
+                                             time[event == "first_contact"], 
+                                             units = "secs")) %>% distinct(playId, TimeToTackleAfterMiss)
+TTSlideAM <- trackingWeek1 %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterMiss = difftime(time[event == "qb_slide"], 
+                                             time[event == "first_contact"], 
+                                             units = "secs")) %>% distinct(playId, TimeToTackleAfterMiss)
+TTOBAM <- trackingWeek1 %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterMiss = difftime(time[event == "out_of_bounds"], 
+                                             time[event == "first_contact"], 
+                                             units = "secs")) %>% distinct(playId, TimeToTackleAfterMiss)
+
+#Plays with Missed Tackles: Time To Tackle/Result After First Contact
+
+TTTAM <- bind_rows(TTTackleAM, TTTouchdownAM, TTSlideAM, TTOBAM) %>% distinct(playId, TimeToTackleAfterMiss)
+
+#Week 1 Lions Eagles gameid = 2022091104
+
+missedTacklePlays <- tackles %>% filter(gameId == 2022091104, pff_missedTackle == 1) %>% select(playId)
+
+LionsEaglesMissedTackles <- plays %>% filter(gameId == 2022091104, playId %in% missedTacklePlays$playId)
+
+LionsEaglesMissedTackles
+```
+
+
+#Tracking Animations
+```{r}
+library(tidyverse)
+library(gganimate)
+library(cowplot)
+library(ggridges)
+library(repr)
+
+#turning off warnings
+options(warn=-1)
+
+#setting plot width and height
+options(repr.plot.width=15, repr.plot.height = 10)
+```
+
+```{r}
+df_plays <- read_csv("plays.csv",
+                    col_types = cols())
+
+#includes background info for players
+df_players <- read_csv("players.csv",
+                      col_types = cols())
+```
+
+```{r}
+head(df_players)
+```
+
+```{r}
+head(df_plays)
+```
+
+```{r}
+#loading command to make NFL field in ggplot (credit to Marschall Furman)
+source('https://raw.githubusercontent.com/mlfurman3/gg_field/main/gg_field.R')
+```
+
+```{r}
+
+#merging tracking data to play
+example_play <- inner_join(LionsEaglesMissedTackles,
+                           trackingWeek1,
+                           by = c("gameId" = "gameId",
+                                  "playId" = "playId")) %>% filter(playId == 86)
+```
+
+```{r}
+library(tidyverse)
+library(gganimate)
+library(cowplot)
+library(ggridges)
+library(repr)
+
+#upright dimensions
+uprightLength = 18.5/3
+uprightYardline = 120
+uprightAccrossFieldLocation = 160/6
+uprightColor = "#E8DE35"
+uprightlineWidth = 2
+uprightShape = 21
+uprightSize = 4
+uprightOutlineColor = 'black'
+
+#attributes used for plot. first is away, second is football, third is home.
+cols_fill <- c("dodgerblue1", "#663300", "firebrick1")
+cols_col <- c("#000000", "#663300", "#000000")
+size_vals <- c(6, 4, 6)
+shape_vals <- c(21, 16, 21)
+plot_title <- example_play$playDescription[1]
+nFrames <- max(example_play$frameId)
+
+#plotting
+anim <- ggplot() +
+
+
+        #creating field underlay
+        gg_field(yardmin = -2, yardmax = 122) +
+
+        #filling forest green for behind back of endzone
+        theme(panel.background = element_rect(fill = 'forestgreen',
+                                              color = 'forestgreen'),
+              panel.grid = element_blank()) +
+
+
+        #adding field goal uprights
+        annotate(geom = 'segment',
+                 x = uprightYardline,
+                 xend = uprightYardline,
+                 y = uprightAccrossFieldLocation + uprightLength/2,
+                 yend = uprightAccrossFieldLocation - uprightLength/2,
+                 color = uprightColor,
+                 lwd = uprightlineWidth) +
+
+        annotate(geom = 'point',
+                 x = uprightYardline,
+                 y = uprightAccrossFieldLocation + uprightLength/2,
+                 size = uprightSize,
+                 shape = uprightShape,
+                 fill = uprightColor,
+                 color = uprightOutlineColor) +
+
+        annotate(geom = 'point',
+                 x = uprightYardline,
+                 y = uprightAccrossFieldLocation - uprightLength/2,
+                 size = uprightSize,
+                 shape = uprightShape,
+                 fill = uprightColor,
+                 color = uprightOutlineColor) +
+  
+        annotate(geom = 'segment',
+                 x = 0,
+                 xend = 0,
+                 y = uprightAccrossFieldLocation + uprightLength/2,
+                 yend = uprightAccrossFieldLocation - uprightLength/2,
+                 color = uprightColor,
+                 lwd = uprightlineWidth) +
+
+        annotate(geom = 'point',
+                 x = 0,
+                 y = uprightAccrossFieldLocation + uprightLength/2,
+                 size = uprightSize,
+                 shape = uprightShape,
+                 fill = uprightColor,
+                 color = uprightOutlineColor) +
+
+        annotate(geom = 'point',
+                 x = 0,
+                 y = uprightAccrossFieldLocation - uprightLength/2,
+                 size = uprightSize,
+                 shape = uprightShape,
+                 fill = uprightColor,
+                 color = uprightOutlineColor) +
+
+
+        #setting size and color parameters
+        scale_size_manual(values = size_vals, guide = FALSE) + 
+        scale_shape_manual(values = shape_vals, guide = FALSE) +
+        scale_fill_manual(values = cols_fill, guide = FALSE) + 
+        scale_colour_manual(values = cols_col, guide = FALSE) +
+
+
+        #adding players
+        geom_point(data = example_play, aes(x = x,
+                                          y = y, 
+                                          shape = club,
+                                          fill = club,
+                                          group = nflId,
+                                          size = club,
+                                          colour = club), 
+                 alpha = 0.7) +  
+
+        #adding jersey numbers
+        geom_text(data = example_play,
+                  aes(x = x, y = y, label = jerseyNumber),
+                  colour = "white", 
+                vjust = 0.36, size = 3.5) + 
+
+
+        #titling plot with play description
+        labs(title = plot_title) +
+
+        #setting animation parameters
+        transition_time(frameId)  +
+        ease_aes('linear') + 
+        NULL 
+
+
+#saving animation to display in markdown cell below:
+anim_save('MissedTackle.gif',
+          animate(anim, width = 720, height = 440,
+                  fps = 10, nframe = nFrames))
+```
+
+
+```{r}
+anim
+```
+
+```{r}
+TTTackleAFC <- trackingLionsEagles %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterFirstContact = difftime(time[event == "tackle"], 
+                                           time[event == "first_contact"], 
+                                           units = "secs")) %>% distinct(playId, TimeToTackleAfterFirstContact)
+TTTouchdownAFC <- trackingLionsEagles %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterFirstContact = difftime(time[event == "touchdown"], 
+                                           time[event == "first_contact"], 
+                                           units = "secs")) %>% distinct(playId, TimeToTackleAfterFirstContact)
+TTSlideAFC <- trackingLionsEagles %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterFirstContact = difftime(time[event == "qb_slide"], 
+                                           time[event == "first_contact"], 
+                                           units = "secs")) %>% distinct(playId, TimeToTackleAfterFirstContact)
+TTOBAFC <- trackingLionsEagles %>% 
+  filter(!is.na(event)) %>% 
+  group_by(playId) %>% 
+  reframe(TimeToTackleAfterFirstContact = difftime(time[event == "out_of_bounds"], 
+                                           time[event == "first_contact"], 
+                                           units = "secs")) %>% distinct(playId, TimeToTackleAfterFirstContact)
+
+#Plays with Missed Tackles: Time To Tackle After Miss(First Contact)
+
+TTTAFC <- bind_rows(TTTackleAFC, TTTouchdownAFC, TTSlideAFC, TTOBAFC) %>% 
+  distinct(playId, TimeToTackleAfterFirstContact) %>% arrange(playId)
+
+playsLionsEagles <- playsLionsEagles %>% left_join(TTTAFC, by = "playId")
+```
+
